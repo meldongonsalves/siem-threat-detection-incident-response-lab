@@ -1,0 +1,66 @@
+<!--
+  Custom Wazuh Detection Rules
+  Author: Meldon Gonsalves
+
+  These two rules were authored for this lab to detect specific attacker
+  behaviors observed during the investigation documented in
+  investigation-report.md. Both are mapped to MITRE ATT&CK techniques.
+
+  Note: rule 100001 (a default/example sshd rule shipped with Wazuh) has
+  been omitted here as it was not authored as part of this project.
+-->
+
+<!--
+  Rule 100200 — Windows Guest Account Enabled
+  Detects activation of the built-in Windows Guest account, which is
+  disabled by default. Enabling it is a common indicator of unauthorized
+  account activity or an attempt to establish an easy-access foothold.
+
+  MITRE ATT&CK: T1078 — Valid Accounts
+-->
+<group name="windows,windows_security,account_changed,adduser">
+
+  <rule id="100200" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4722$</field>
+    <field name="win.eventdata.targetUserName">^Guest$</field>
+
+    <description>Meldon Windows Guest account was enabled.</description>
+
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+
+    <group>
+      windows,
+      windows_account_management,
+      account_enabled,
+      guest_account,
+    </group>
+  </rule>
+
+</group>
+
+<!--
+  Rule 100101 — Multiple SSH Login Failures From the Same Source
+  Correlates repeated individual SSH authentication failures (rule 5760,
+  a low-signal base Wazuh rule) into a single high-confidence brute-force
+  alert. Fires on 3+ failures from the same source IP within 120 seconds.
+
+  This rule is also wired to Wazuh's Active Response module, which
+  automatically executes a firewall-drop action against the offending
+  source IP when it fires — see README.md for details and verification.
+
+  MITRE ATT&CK: T1110 — Brute Force
+-->
+<group name="local,syslog,sshd,authentication_failed,">
+  <rule id="100101" level="10" frequency="3" timeframe="120">
+    <if_matched_sid>5760</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple SSH login failures observed from the same source IP</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failed,ssh_bruteforce,credential_access,</group>
+  </rule>
+</group>
