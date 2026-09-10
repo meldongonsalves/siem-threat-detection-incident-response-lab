@@ -107,7 +107,34 @@ Based on the sequence and nature of the activity, the intent is consistent with 
 
 ---
 
+## Prevention & Hardening
+
+Detection and automated response contained this activity, but a mature security posture should aim to prevent these techniques from succeeding in the first place. Recommended hardening per technique observed:
+
+| Technique | Detected via | Hardening to prevent recurrence |
+|---|---|---|
+| Guest account activation (T1078) | Custom rule 100200 | Enforce via Group Policy that the Guest account cannot be enabled; alert on any GPO drift that would permit it |
+| Unauthorized local admin creation | Built-in Wazuh rules (4720/4732) | Restrict local account creation to domain-managed/privileged workflows (e.g. LAPS or a PAM solution); remove standing local admin rights where not required |
+| SSH brute force (T1110) | Custom rule 100101 + active response | Move to SSH key-based authentication only (disable password auth entirely); add `fail2ban` as a host-level layer in addition to SIEM-driven response, so the account is throttled even if the SIEM is unreachable |
+| Data staging via shell redirection | **Not detected** — identified gap | Deploy `auditd` with execve/file-write rules on sensitive paths (`/etc/passwd`, `/etc/shadow`); restrict read access to sensitive files via file permissions/SELinux where possible, rather than relying on detection alone |
+
+The general principle: every control implemented in this lab was **detective or responsive**, not **preventive**. A production environment should layer both — hardening reduces how often these rules ever need to fire, while detection and active response remain the safety net for what hardening misses.
+
+## Lessons Learned & Future Improvements
+
+**What worked well:**
+- Active response provided genuinely fast, unattended containment (sub-second) once a rule was correctly tuned — proving the value of pairing detection with automated action rather than alerting alone.
+- Investigating with intentionally generated telemetry (rather than a pre-built dataset) forced real troubleshooting — field-name mismatches, XML syntax errors, and enrollment failures all had to be diagnosed from raw logs, not assumed.
+
+**What I'd do differently / next:**
+- **Close the shell-redirection detection gap** identified above by adding `auditd`, then re-run the same scenario to confirm the staging action becomes visible.
+- **Add a threat intelligence enrichment step** — integrate Wazuh with VirusTotal or a similar feed so file hashes and IPs are automatically checked against known-bad indicators, rather than relying solely on behavioral rules.
+- **Extend active response beyond SSH** — currently only the brute-force rule triggers automated containment; the guest-account rule is detection-only. A logical next step is disabling the account automatically via Wazuh's `disable-account` active response script when it fires.
+- **Simulate a full attack chain with a dedicated attacker VM** (e.g. Kali Linux) rather than generating activity from a "trusted" endpoint, to more realistically test detection of lateral movement between hosts.
+- **Introduce log retention and storage sizing planning**, since this lab did not address how Wazuh's archive indices would be managed at production scale over time.
+
 ## Recommendations
+
 
 1. **Guest account policy:** Guest accounts should remain disabled by default and any activation event should trigger an immediate high-priority alert, as configured in this lab's custom rule.
 2. **Privileged group monitoring:** Additions to the local/domain Administrators group should be treated as high-severity events regardless of the account's age, given how quickly `student1` was escalated after creation.
